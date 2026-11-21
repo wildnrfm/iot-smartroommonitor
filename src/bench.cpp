@@ -1,11 +1,9 @@
-// =====================================================================
-//  Penguji komponen (Tahap 4) - tanpa WiFi dan tanpa Blynk
-//  Serial Monitor 115200. Nilai sensor tercetak tiap 2 detik.
-//  Kirim huruf: r = LED merah, y = LED kuning, b = buzzer, k = relay, h = bantuan.
-//  Tiap huruf MEMBALIK level pin. Untuk buzzer dan relay, catat level pin
-//  (HIGH atau LOW) yang membuatnya AKTIF, lalu isi RELAY_ACTIVE_LOW dan
-//  BUZZER_ACTIVE_LOW di main.cpp.
-// =====================================================================
+/**
+ * Penguji komponen
+ *
+ * Program uji tanpa Wi-Fi atau Blynk. Nilai sensor dicetak setiap 2 detik.
+ * Perintah Serial: r LED merah, y LED kuning, b buzzer, k relay, h bantuan.
+ */
 #include <Arduino.h>
 #include <DHT.h>
 
@@ -19,7 +17,10 @@ constexpr uint8_t PIN_BUZZ  = 25;
 constexpr uint8_t PIN_RELAY = 13;
 
 DHT dht(PIN_DHT, DHT22);
-bool lvlR = false, lvlY = false, lvlBuzz = false, lvlRelay = false;   // level pin saat ini
+bool lvlR = false;
+bool lvlY = false;
+bool lvlBuzz = false;
+bool lvlRelay = false;
 uint32_t lastPrint = 0;
 
 void help() {

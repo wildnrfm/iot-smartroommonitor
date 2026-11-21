@@ -1,67 +1,52 @@
-/*
-  SMART ROOM MONITOR - versi perangkat asli (Kelompok 5)
-  ESP32 + DHT22 + LDR + PIR + Relay + Blynk IoT
-  Diturunkan dari Smart Room Monitor v2 (mini project, Wokwi).
+/**
+ * Smart Room Monitor
+ *
+ * Pemantauan suhu, kelembapan, cahaya, dan gerakan menggunakan ESP32.
+ * Kontrol Blynk tersedia pada V3-V8, sedangkan pembacaan sensor pada V0-V2.
+ *
+ * Konfigurasi sensitif disimpan di include/secrets.h dan tidak di-commit.
+ */
 
-  Datastream: V0 suhu, V1 kelembapan, V2 cahaya, V3 kipas, V4 mode manual,
-              V5 batas suhu, V6 status, V7 keberadaan orang, V8 mute alarm.
-
-  Perubahan dari versi simulasi:
-  - DHT22 pindah ke GPIO4 (Bagian 5 dokumen), bukan GPIO15.
-  - BlynkSimpleEsp32_SSL.h (TLS, port 443). Jalur DNS/IP cadangan khusus simulator dibuang.
-  - Token dan WiFi dibaca dari include/secrets.h (tidak ikut di-commit).
-  - Polaritas relay dan buzzer dibuat konstanta. Buzzer aktif dibunyikan non-blocking
-    (300 ms tiap 2 detik), bukan digetarkan 1 kHz.
-  - Histeresis suhu 1 C. Arah ambang LDR bisa dibalik.
-  - Data sensor dikirim tiap 30 detik (hemat kuota pesan). V8 ditambah untuk mute dari aplikasi.
-  - Kedua LED berkedip 2x saat boot (penanda jika ESP32 reset sendiri).
-  Bagian bertanda "SESUAIKAN" diisi dari hasil uji komponen (Tahap 4).
-*/
-
-// ===== 1. DATA BLYNK DAN WIFI =====
-// BLYNK_TEMPLATE_ID, BLYNK_TEMPLATE_NAME, BLYNK_AUTH_TOKEN, WIFI_SSID, dan WIFI_PASS
-// ada di include/secrets.h (salin dari secrets.h.example). Jangan di-commit.
 #include "secrets.h"
 #define BLYNK_PRINT Serial
 #include <Arduino.h>
 #include <WiFi.h>
-#include <BlynkSimpleEsp32_SSL.h>   // TLS (port 443). BlynkSimpleEsp32.h memakai port 80 tanpa enkripsi
+#include <BlynkSimpleEsp32_SSL.h>
 #include <DHT.h>
 
-// ===== 2. PIN (Bagian 5 dokumen rancangan) =====
-#define DHT_PIN 4         // DATA DHT22 (bukan GPIO15)
+// Konfigurasi pin.
+#define DHT_PIN 4
 #define DHT_TYPE DHT22
-#define LDR_PIN 34        // AO modul photoresistor
-#define LED_ALARM 26      // LED merah
-#define LED_LAMPU 27      // LED kuning
-#define BUZZER_PIN 25     // modul buzzer aktif
-#define RELAY_PIN 13      // relay untuk kipas
-#define PIR_PIN 32        // OUT sensor PIR
-#define TOMBOL_PIN 33     // tombol mute (satu kaki ke GND)
+#define LDR_PIN 34
+#define LED_ALARM 26
+#define LED_LAMPU 27
+#define BUZZER_PIN 25
+#define RELAY_PIN 13
+#define PIR_PIN 32
+#define TOMBOL_PIN 33
 
-// ===== 3. PENGATURAN =====
-float batasSuhu = 30.0;                          // derajat C, bisa diubah lewat slider V5
+// Pengaturan sensor dan jadwal tugas.
+float batasSuhu = 30.0;
 const float HISTERESIS_C = 1.0;                  // alarm dan kipas mati saat suhu <= batas - 1 C
 const float BATAS_LEMBAP = 70.0;
-const unsigned long LAMPU_TAHAN_MS = 10000;      // lampu tetap nyala 10 detik setelah gerakan terakhir
-const unsigned long EVENT_JEDA_MS = 30000;       // jeda minimal antar notifikasi
-const unsigned long KIRIM_MS = 30000;            // data sensor ke Blynk tiap 30 detik (hemat kuota pesan)
-const unsigned long COBA_BLYNK_MS = 30000;       // jeda antar percobaan menyambung ke Blynk saat offline
-const unsigned long BUZZER_PERIODE_MS = 2000;    // alarm: bunyi 300 ms setiap 2 detik
+const unsigned long LAMPU_TAHAN_MS = 10000;
+const unsigned long EVENT_JEDA_MS = 30000;
+const unsigned long KIRIM_MS = 30000;
+const unsigned long COBA_BLYNK_MS = 30000;
+const unsigned long BUZZER_PERIODE_MS = 2000;
 const unsigned long BUZZER_BUNYI_MS = 300;
 
-// --- SESUAIKAN setelah uji komponen (Tahap 4) ---
-const bool RELAY_ACTIVE_LOW = false;  // dari pengujian: modul relay aktif saat pin HIGH
-const bool BUZZER_ACTIVE_LOW = false;  // buzzer 2-kaki: + ke GPIO25, - ke GND
-const bool LDR_DARK_IS_HIGH = true;    // true: nilai makin besar = makin gelap
-const int LDR_GELAP = 2000;            // ambang gelap (skala 0-4095), kalibrasi di kamar
-// -------------------------------------------------
+// Konfigurasi komponen hasil pengujian.
+const bool RELAY_ACTIVE_LOW = false;
+const bool BUZZER_ACTIVE_LOW = false;
+const bool LDR_DARK_IS_HIGH = true;
+const int LDR_GELAP = 2000;
+
 const uint8_t RELAY_ON = RELAY_ACTIVE_LOW ? LOW : HIGH;
 const uint8_t RELAY_OFF = RELAY_ACTIVE_LOW ? HIGH : LOW;
 const uint8_t BUZZER_ON = BUZZER_ACTIVE_LOW ? LOW : HIGH;
 const uint8_t BUZZER_OFF = BUZZER_ACTIVE_LOW ? HIGH : LOW;
 
-// ===== 4. VARIABEL =====
 DHT dht(DHT_PIN, DHT_TYPE);
 BlynkTimer timer;
 
@@ -70,10 +55,10 @@ bool gelap = false;
 bool adaOrang = false;
 bool lampuNyala = false;
 bool kipasNyala = false;
-bool modeManual = false;       // V4: false = otomatis, true = manual
-bool kipasManual = false;      // V3: perintah kipas saat mode manual
-bool alarmDibisukan = false;   // tombol fisik atau V8
-bool panasAktif = false;       // suhu di atas batas (dengan histeresis)
+bool modeManual = false;
+bool kipasManual = false;
+bool alarmDibisukan = false;
+bool panasAktif = false;
 bool panasSebelumnya = false;
 bool pernahGerak = false;
 unsigned long terakhirGerak = 0;
@@ -92,7 +77,6 @@ bool wifiDilaporkan = false;
 bool pernahCobaBlynk = false;
 unsigned long terakhirCobaBlynk = 0;
 
-// ===== 5. KONTROL DARI BLYNK =====
 BLYNK_CONNECTED() {
   Serial.println("Terhubung ke Blynk Cloud");
   pernahKirim = false;
@@ -100,10 +84,10 @@ BLYNK_CONNECTED() {
   orangTerkirim = -1;
   kipasTerkirim = -1;
   muteTerkirim = -1;
-  Blynk.syncVirtual(V4, V5);  // ambil mode dan batas suhu; status kipas diperbarui dari firmware
+  Blynk.syncVirtual(V4, V5);
 }
 
-// Switch Kipas (V3) selalu mengambil alih ke mode manual agar perintah tidak diabaikan.
+// V3 mengalihkan kontrol kipas ke mode manual.
 BLYNK_WRITE(V3) {
   if (!modeManual) {
     modeManual = true;
@@ -114,7 +98,6 @@ BLYNK_WRITE(V3) {
   kipasTerkirim = kipasManual ? 1 : 0;
 }
 
-// Switch Mode Manual (V4)
 BLYNK_WRITE(V4) {
   modeManual = (param.asInt() == 1);
   if (modeManual) {
@@ -126,19 +109,16 @@ BLYNK_WRITE(V4) {
   Serial.println(modeManual ? "Mode: MANUAL" : "Mode: OTOMATIS");
 }
 
-// Slider Batas Suhu (V5)
 BLYNK_WRITE(V5) {
   batasSuhu = param.asFloat();
   Serial.printf("Batas suhu diubah: %.1f C\n", batasSuhu);
 }
 
-// Switch Mute Alarm (V8): 1 = bisukan buzzer, 0 = aktifkan kembali
 BLYNK_WRITE(V8) {
   alarmDibisukan = (param.asInt() == 1);
   Serial.println(alarmDibisukan ? "Buzzer DIBISUKAN (dari aplikasi)" : "Buzzer AKTIF kembali (dari aplikasi)");
 }
 
-// ===== 6. FUNGSI BANTU =====
 bool bolehKirimEvent() {
   if (!pernahEvent || millis() - terakhirEvent >= EVENT_JEDA_MS) {
     pernahEvent = true;
@@ -148,7 +128,6 @@ bool bolehKirimEvent() {
   return false;
 }
 
-// Jika internet bermasalah, alarm, kipas, dan lampu tetap bekerja.
 void urusKoneksi() {
   if (WiFi.status() != WL_CONNECTED) return;
 
@@ -170,9 +149,8 @@ void urusKoneksi() {
   }
 }
 
-// ===== 7. TUGAS CEPAT (tiap 50 ms): tombol mute, lampu pintar, buzzer =====
+// Tugas berjalan setiap 50 ms.
 void tugasCepat() {
-  // 1) Tombol mute: dideteksi saat tombol baru ditekan
   static bool tombolSebelumnya = HIGH;
   bool tombol = digitalRead(TOMBOL_PIN);
   if (tombolSebelumnya == HIGH && tombol == LOW) {
@@ -181,7 +159,6 @@ void tugasCepat() {
   }
   tombolSebelumnya = tombol;
 
-  // 2) Lampu pintar: nyala jika gelap DAN ada orang
   cahaya = analogRead(LDR_PIN);
   gelap = LDR_DARK_IS_HIGH ? (cahaya > LDR_GELAP) : (cahaya < LDR_GELAP);
   adaOrang = (digitalRead(PIR_PIN) == HIGH);
@@ -193,12 +170,11 @@ void tugasCepat() {
   lampuNyala = gelap && orangMasihAda;
   digitalWrite(LED_LAMPU, lampuNyala ? HIGH : LOW);
 
-  // 3) Buzzer: selama alarm aktif dan tidak dibisukan, bunyi 300 ms setiap 2 detik
   bool bunyi = panasAktif && !alarmDibisukan && (millis() % BUZZER_PERIODE_MS < BUZZER_BUNYI_MS);
   digitalWrite(BUZZER_PIN, bunyi ? BUZZER_ON : BUZZER_OFF);
 }
 
-// ===== 8. TUGAS SENSOR (tiap 2 detik): suhu, alarm, kipas, kirim data =====
+// Tugas berjalan setiap 2 detik.
 void tugasSensor() {
   float suhu = dht.readTemperature();
   float lembap = dht.readHumidity();
@@ -207,21 +183,18 @@ void tugasSensor() {
     return;
   }
 
-  // Suhu di atas batas, dengan histeresis supaya relay tidak berkedip di sekitar batas
+  // Histeresis mencegah perubahan relay saat suhu berada dekat ambang.
   if (!panasAktif && suhu > batasSuhu) panasAktif = true;
   else if (panasAktif && suhu <= batasSuhu - HISTERESIS_C) panasAktif = false;
   bool panas = panasAktif;
   bool lembab = lembap > BATAS_LEMBAP;
 
-  // Pembisuan alarm otomatis dibatalkan ketika suhu sudah normal
   if (!panas) alarmDibisukan = false;
   digitalWrite(LED_ALARM, panas ? HIGH : LOW);
 
-  // Kipas: otomatis mengikuti suhu, atau manual dari Blynk
   kipasNyala = modeManual ? kipasManual : panas;
   digitalWrite(RELAY_PIN, kipasNyala ? RELAY_ON : RELAY_OFF);
 
-  // Status ruangan (urutan prioritas: panas > lembap > gelap > nyaman)
   const char* status = "Nyaman";
   if (panas) status = "Panas";
   else if (lembab) status = "Lembap";
@@ -264,7 +237,6 @@ void tugasSensor() {
     }
   }
 
-  // Tampilkan di Terminal (format JSON)
   char payload[360];
   snprintf(payload, sizeof(payload),
            "{\"suhu\":%.1f,\"kelembapan\":%.1f,\"cahaya\":%d,\"panas\":%s,\"gelap\":%s,"
@@ -284,7 +256,6 @@ void tugasSensor() {
   Serial.println(payload);
 }
 
-// ===== 9. SETUP & LOOP =====
 void setup() {
   Serial.begin(115200);
   pinMode(LED_ALARM, OUTPUT);
@@ -293,8 +264,8 @@ void setup() {
   pinMode(RELAY_PIN, OUTPUT);
   pinMode(PIR_PIN, INPUT);
   pinMode(TOMBOL_PIN, INPUT_PULLUP);
-  digitalWrite(RELAY_PIN, RELAY_OFF);     // kipas mati saat start
-  digitalWrite(BUZZER_PIN, BUZZER_OFF);   // buzzer mati saat start
+  digitalWrite(RELAY_PIN, RELAY_OFF);
+  digitalWrite(BUZZER_PIN, BUZZER_OFF);
 
   // Kedua LED berkedip 2x sebagai penanda boot. Jika kedip muncul sendiri saat
   // kipas hidup atau mati, berarti ESP32 reset (cek kapasitor, dioda, dan kabel kipas).

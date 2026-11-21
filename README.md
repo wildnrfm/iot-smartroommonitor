@@ -16,6 +16,23 @@ Firmware pemantauan dan otomasi ruangan berbasis ESP32. Sistem membaca suhu dan 
 
 Firmware ini ditujukan untuk ESP32 klasik yang kompatibel dengan `esp32doit-devkit-v1`.
 
+### Daftar komponen
+
+- 1 buah ESP32 DevKit
+- 1 buah sensor DHT22
+- 1 buah modul LDR/photoresistor
+- 1 buah sensor PIR
+- 1 buah modul relay
+- 1 buah kipas DC 5 V
+- 1 buah buzzer aktif
+- 1 buah push button
+- 1 buah LED merah
+- 1 buah LED kuning
+- 2 buah resistor seri untuk LED
+- 1 buah PCB double layer untuk perakitan rangkaian
+
+Daftar di atas mencakup komponen utama. Periksa label modul relay dan tipe buzzer sebelum perakitan karena modul generik dapat memiliki polaritas atau tegangan koil yang berbeda.
+
 | Komponen | Sambungan ESP32 | Catatan |
 | --- | --- | --- |
 | Tombol mute | GPIO33 dan GND | Menggunakan `INPUT_PULLUP`; tombol aktif saat ditekan. |
@@ -29,9 +46,11 @@ Firmware ini ditujukan untuk ESP32 klasik yang kompatibel dengan `esp32doit-devk
 
 ### Catu daya kipas dan relay
 
-Jangan mengandalkan pin VIN atau port USB ESP32 untuk menyuplai kipas tanpa memastikan kemampuan arusnya. Gunakan catu daya yang sesuai dengan rating kipas. Untuk kipas DC dengan catu terpisah, sambungkan positif catu kipas ke `COM`, `NO` ke positif kipas, dan negatif kipas ke negatif catu kipas. Sisi kendali relay (`IN`, `DC+`, `DC-`) harus tetap mendapat catu sesuai spesifikasi modul.
+Sistem menggunakan kipas DC 5 V. Jangan mengandalkan pin VIN atau port USB ESP32 untuk menyuplai kipas tanpa memastikan kemampuan arusnya. Pilihan paling aman adalah catu daya 5 V terpisah yang mampu memasok arus kipas. Sambungkan positif catu daya kipas ke `COM`, terminal `NO` ke positif kipas, dan negatif kipas ke GND/negatif catu daya kipas.
 
-Jangan menyambungkan tegangan listrik rumah ke rangkaian ini kecuali menggunakan relay, enclosure, dan instalasi yang memang dirancang serta ditangani untuk tegangan tersebut.
+Jika relay memakai koil 5 V, sumber relay harus 5 V dan GND relay harus terhubung dengan GND ESP32. Jika kipas dan relay menggunakan catu daya terpisah, sambungkan GND kedua sumber agar level sinyal kendali memiliki referensi yang sama. Uji relay tanpa kipas sebelum beban terhubung.
+
+Jangan menyambungkan tegangan listrik rumah ke rangkaian ini. Untuk beban AC, gunakan relay dan instalasi yang dirancang untuk tegangan tersebut serta penanganan dari teknisi yang berkompeten.
 
 ## Persiapan
 
